@@ -69,6 +69,7 @@ pub struct CoreGraphicsTextLayout {
     // these two are stored values we use to determine cursor extents when the layout is empty.
     default_baseline: f64,
     default_line_height: f64,
+    strict_line_height: bool,
     line_metrics: Rc<[LineMetric]>,
     x_offsets: Rc<[f64]>,
     trailing_ws_width: f64,
@@ -89,6 +90,7 @@ pub struct CoreGraphicsTextLayoutBuilder {
     has_set_default_attrs: bool,
     default_baseline: f64,
     default_line_height: f64,
+    strict_line_height: bool,
     attrs: Attributes,
 }
 
@@ -166,8 +168,10 @@ impl CoreGraphicsTextLayoutBuilder {
         self.has_set_default_attrs = true;
         let whole_range = self.attr_string.range();
         let font = self.current_font();
+        if !self.strict_line_height {
         let height = compute_line_height(font.ascent(), font.descent(), font.leading());
         self.default_line_height = height;
+        }
         self.default_baseline = (font.ascent() + 0.5).floor();
         self.attr_string.set_font(whole_range, &font);
         self.attr_string
@@ -496,7 +500,14 @@ impl CoreGraphicsTextLayoutBuilder {
             has_set_default_attrs: false,
             default_baseline: 0.0,
             default_line_height: 0.0,
+            strict_line_height: false,
         }
+    }
+
+    pub fn strict_line_height(mut self, line_height: f64) -> Self {
+        self.default_line_height = line_height;
+        self.strict_line_height = true;
+        self
     }
 }
 
@@ -549,6 +560,7 @@ impl TextLayoutBuilder for CoreGraphicsTextLayoutBuilder {
             self.width,
             self.default_baseline,
             self.default_line_height,
+            self.strict_line_height,
         ))
     }
 }
@@ -683,6 +695,7 @@ impl CoreGraphicsTextLayout {
         width_constraint: f64,
         default_baseline: f64,
         default_line_height: f64,
+        strict_line_height: bool,
     ) -> Self {
         let framesetter = Framesetter::new(&attr_string);
 
@@ -699,6 +712,7 @@ impl CoreGraphicsTextLayout {
             width_constraint: f64::NAN,
             default_baseline,
             default_line_height,
+            strict_line_height,
             line_metrics: Rc::new([]),
             x_offsets: Rc::new([]),
             trailing_ws_width: 0.0,
@@ -733,6 +747,7 @@ impl CoreGraphicsTextLayout {
             &self.text,
             self.default_line_height,
             self.default_baseline,
+            self.strict_line_height,
         );
         self.line_metrics = layout_metrics.line_metrics.into();
         self.x_offsets = layout_metrics.x_offsets.into();
@@ -829,6 +844,7 @@ fn build_line_metrics(
     text: &str,
     default_line_height: f64,
     default_baseline: f64,
+    strict_line_height: bool,
 ) -> LayoutMetrics {
     let line_origins = frame.get_line_origins(CFRange::init(0, 0));
     assert_eq!(frame.lines().len(), line_origins.len());
@@ -876,7 +892,11 @@ fn build_line_metrics(
 
         let baseline = (typo_bounds.ascent + 0.5).floor();
         let height =
-            compute_line_height(typo_bounds.ascent, typo_bounds.descent, typo_bounds.leading);
+        if strict_line_height {
+            default_line_height
+        } else {
+            compute_line_height(typo_bounds.ascent, typo_bounds.descent, typo_bounds.leading)
+        };
         let y_offset = cumulative_height;
         cumulative_height += height;
 
