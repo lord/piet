@@ -92,6 +92,7 @@ impl<'a> CoreGraphicsContext<'a> {
             ctx.concat_ctm(to_cgaffine(xform));
         }
         let text = text.unwrap_or_else(CoreGraphicsText::new_with_unique_state);
+        ctx.set_allows_font_smoothing(false);
 
         CoreGraphicsContext {
             ctx,
